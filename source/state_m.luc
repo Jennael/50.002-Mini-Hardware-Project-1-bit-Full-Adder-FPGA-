@@ -9,10 +9,10 @@ module state_m (
     input a_m,                                // to manually control A-input to full adder in manual mode
     input b_m,                                // to manually control B-input to full adder in manual mode
     input c_m,                                // to manually control carry-in-input to full adder in manual mode
-    output pass[8],                           // high when a case pass in auto mode. follows b_m in manual mode
-    output fail[8],                           // high when a case fail in auto mode. follows a_m in manual mode
+    output pass[8],                           // high when a case pass in auto mode. follows a_m in manual mode
+    output fail[8],                           // high when a case fail in auto mode. follows c_m in manual mode
     output manual[8],                         // high when manual mode is active and it starts to blink when wrong set of inputs (i.e. sum, carry) are recieved from full adder for a set of outputs (a, b, carry-in)
-    output count[8],                          // keeps tack of the case number for auto test in auto mode. follows c_m in manual mode
+    output count[8],                          // keeps tack of the case number for auto test in auto mode. follows b_m in manual mode
     output io_seg[8],                         // stores the values for 7-segment display
     output io_sel[4],                         // used to switch between 7-segment displays
     output a,                                 // outputs to full adder's A-input in auto mode
