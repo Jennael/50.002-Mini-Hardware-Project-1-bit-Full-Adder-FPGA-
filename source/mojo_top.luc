@@ -1,0 +1,82 @@
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8],    // DIP switches on IO Shield
+    output a,               // 51
+    output b,               // 41
+    output c,               // 35
+    input sum,              // 33
+    input carry             // 30
+  ) {
+  
+  sig rst;                  // reset signal
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    
+    .rst(rst) {
+      state_m state_m;
+    }
+  }
+  
+  always {
+    reset_cond.in = ~rst_n; // input raw inverted reset signal
+    rst = reset_cond.out;   // conditioned reset
+    
+    led = 8h00;             // turn LEDs off
+    spi_miso = bz;          // not using SPI
+    spi_channel = bzzzz;    // not using flags
+    avr_rx = bz;            // not using serial port
+    
+    io_led = 3x{{8h00}};    // turn LEDs off
+    io_seg = 8hff;          // turn segments off
+    io_sel = 4hf;           // select no digits
+    a = 0;
+    b = 0;
+    c = 0;
+    
+    // connecting state_m module to inputs/outputs
+    // 7-segment display connection
+    io_seg = state_m.io_seg;
+    io_sel = state_m.io_sel;
+    
+    // connection to inputs/outputs of full adder
+    state_m.sum = sum;
+    state_m.carry = carry;
+    a = state_m.a;
+    b = state_m.b;
+    c = state_m.c;
+    
+    // connecting A, B & carry-in for manual mode 
+    state_m.a_m = io_dip[0][0];
+    state_m.b_m = io_dip[1][0];
+    state_m.c_m = io_dip[2][0];
+    
+    // connection for mode cotrol buttons
+    state_m.switch1 = io_button[0];
+    state_m.switch2 = io_button[2];
+    state_m.start = io_button[1];
+    
+    // misceallaneous output connection
+    led = state_m.manual;
+    io_led[1] = state_m.count;
+    io_led[0] = state_m.pass;
+    io_led[2] = state_m.fail;    
+  }
+}

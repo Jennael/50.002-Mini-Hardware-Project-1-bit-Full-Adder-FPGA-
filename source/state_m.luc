@@ -1,0 +1,285 @@
+module state_m (
+    input clk,                                // clock
+    input rst,                                // reset
+    input sum,                                // sum bit from full adder
+    input carry,                              // carry out bit from full adder
+    input start,                              // to start the auto test when in auto mode
+    input switch1,                            // to switch from auto mode to manual mode 
+    input switch2,                            // to switch from manual mode to auto mode
+    input a_m,                                // to manually control A-input to full adder in manual mode
+    input b_m,                                // to manually control B-input to full adder in manual mode
+    input c_m,                                // to manually control carry-in-input to full adder in manual mode
+    output pass[8],                           // high when a case pass in auto mode. follows b_m in manual mode
+    output fail[8],                           // high when a case fail in auto mode. follows a_m in manual mode
+    output manual[8],                         // high when manual mode is active and it starts to blink when wrong set of inputs (i.e. sum, carry) are recieved from full adder for a set of outputs (a, b, carry-in)
+    output count[8],                          // keeps tack of the case number for auto test in auto mode. follows c_m in manual mode
+    output io_seg[8],                         // stores the values for 7-segment display
+    output io_sel[4],                         // used to switch between 7-segment displays
+    output a,                                 // outputs to full adder's A-input in auto mode
+    output b,                                 // outputs to full adder's B-input in auto mode
+    output c                                  // outputs to full adder's carry-in-input in auto mode
+  ) {
+  
+  // declaration of all the needed modules
+  .clk(clk), .rst(rst) {
+    fsm state = {IDLE, ALLOFF, AON, BON, ABON, CON, ACON, BCON, ABCON, FAIL, PASS, MANUAL};
+    multi_seven_seg seg;                      // for controling 7-segment display
+    dff counter[26];                          // for timing
+    dff register[8];                          // used for storage
+    blinker myBlinker;                        // to generate blinking signal
+  }
+  
+  // variables
+  var z;
+  
+  always {
+    
+    // initialization
+    a = 0;
+    b = 0;
+    c = 0;
+    z = c{carry,sum};                         // concatenate carry and sum to a 2-bit array
+    pass = 8h00;
+    fail = 8h00;
+    count = 8h00;
+    manual = 8h00;
+    counter.d = counter.q + 1;
+    seg.values = {4h0, 4h0, 4h0, 4h0};
+          
+    io_seg = ~seg.seg;                        // connect segments to counter
+    io_sel = ~seg.sel;                        // connect digit select to the driver
+    
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+    
+    // finite state machine
+    case(state.q) {
+    
+      // idle state when switched from manual state to auto state or when the reset button is pressed
+      state.IDLE:
+        a = 0;
+        b = 0;
+        c = 0;
+        seg.values = {4h1, 4hd, 4hc, 4he};    // displays "idle"
+        fail = register.q;
+        // start auto test
+        if(start == 1) {
+          state.d = state.ALLOFF;             // chage to state ALLOFF
+          counter.d = 0;                      // reset counter
+          register.d = 0;                     // reset the memory
+        }
+        // switch to manual mode
+        if(switch1 == 1) {
+          state.d = state.MANUAL;             // change to state MANUAL
+          counter.d = 0;                      // reset counter
+        }
+        
+      // pass state when all the cases pass in auto mode
+      state.PASS:
+        a = 0;
+        b = 0;
+        c = 0;
+        seg.values = {4hb, 4ha, 4h5, 4h5};    // displays "pass"
+        fail = register.q;
+        // start auto test
+        if(start == 1) {
+          state.d = state.ALLOFF;             // chage to state ALLOFF
+          counter.d = 0;                      // reset counter
+          register.d = 0;                     // reset the memory
+        }
+        // switch to manual mode
+        if(switch1 == 1) {
+          state.d = state.MANUAL;             // change to state MANUAL
+          counter.d = 0;                      // reset counter
+          
+        }
+        
+      // pass state when a case fail in auto mode
+      state.FAIL:
+        a = 0;
+        b = 0;
+        c = 0;
+        count = register.q;
+        seg.values = {4hf, 4ha, 4h1, 4hc};    // displays "fail"
+        fail = register.q;
+        if(start == 1) {
+          state.d = state.ALLOFF;             // chage to state ALLOFF
+          counter.d = 0;                      // reset counter
+          register.d = 0;                     // reset the memory
+        }
+        if(switch1 == 1) {
+          state.d = state.MANUAL;             // change to state MANUAL
+          counter.d = 0;                      // reset counter
+        }
+      
+      // when all inputs are low      
+      state.ALLOFF:
+        a = 0;
+        b = 0;
+        c = 0;
+        count = 8h01;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b00) {
+          pass = 8hff;
+          register.d[0] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.AON;                // chage to state AON
+          counter.d = 0;                      // reset counter
+        }
+       
+      // when a is high, b & c is low 
+      state.AON:
+        a = 1;
+        b = 0;
+        c = 0;
+        count = 8h02;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b01) {
+          pass = 8hff;
+          register.d[1] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.BON;                // chage to state BON
+          counter.d = 0;                      // reset counter
+        }
+        
+      // when b is high, a & c is low
+      state.BON:
+        a = 0;
+        b = 1;
+        c = 0;
+        count = 8h04;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b01) {
+          pass = 8hff;
+          register.d[2] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.ABON;               // chage to state ABON
+          counter.d = 0;                      // reset counter
+        }
+       
+      // when c is high, a & b is low  
+      state.CON:
+        a = 0;
+        b = 0;
+        c = 1;
+        count = 8h10;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b01) {
+          pass = 8hff;
+          register.d[4] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.ACON;               // chage to state ACON
+          counter.d = 0;                      // reset counter
+        }
+        
+      // when a & b is high, c is low
+      state.ABON:
+        a = 1;
+        b = 1;
+        c = 0;
+        count = 8h08;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b10) {
+          pass = 8hff;
+          register.d[3] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.CON;                // chage to state CON
+          counter.d = 0;                      // reset counter
+        }
+        
+      // when b & c is high, a is low
+      state.BCON:
+        a = 0;
+        b = 1;
+        c = 1;
+        count = 8h40;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b10) {
+          pass = 8hff;
+          register.d[6] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.ABCON;              // chage to state ABCON
+          counter.d = 0;                      // reset counter
+        }
+        
+      // when a & c is high, b is low
+      state.ACON:
+        a = 1;
+        b = 0;
+        c = 1;
+        count = 8h20;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b10) {
+          pass = 8hff;
+          register.d[5] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          state.d = state.BCON;               // chage to state BCON
+          counter.d = 0;                      // reset counter
+        }
+        
+      // when all inputs are high
+      state.ABCON:
+        a = 1;
+        b = 1;
+        c = 1;
+        count = 8h80;
+        fail = register.q;
+        // check the values of sum and carry
+        if (z == 2b11) {
+          pass = 8hff;
+          register.d[7] = 1;                  // store in memory
+        }
+        if(counter.q[25] == 1) {
+          if (register.q == 8hff){
+            state.d = state.PASS;             // chage to state PASS
+          }
+          else{
+            state.d = state.FAIL;
+          }
+          counter.d = 0;                      // reset counter
+        }
+      
+      // manual state  
+      state.MANUAL:
+        if(switch2 == 1) {
+          state.d = state.IDLE;               // chage to state IDLE
+          counter.d = 0;                      // reset counter
+          register.d = 0;                     // reset the memory
+        }
+        a = a_m;
+        b = b_m;
+        c = c_m;
+        manual = 8hff;
+        seg.values = {4h0, 4h0, 4h0, 4h0};    // 7-segment display disabled
+        if (a_m){
+          pass = 8hff;
+        }
+        if (b_m){
+          count = 8hff;
+        }
+        if (c_m){
+          fail = 8hff;
+        }
+        if (a_m + b_m + c_m != z){
+          manual = 8x{myBlinker.blink};
+          seg.values = {4hf, 4ha, 4h1, 4hc};  // displays "fail"
+        }
+        else if (a_m + b_m + c_m == z){
+          seg.values = {4hb, 4ha, 4h5, 4h5};    // displays "pass"
+        }
+    }
+  }
+}
